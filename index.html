@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alkitab Indonesia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,500;1,8..60,300;1,8..60,400&family=Crimson+Pro:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --parchment: #f9f4e8;
+      --parchment-dark: #f0e8d0;
+      --ink: #1a1208;
+      --ink-light: #3d2e0f;
+      --gold: #b8860b;
+      --gold-light: #d4a017;
+      --gold-pale: #f5e6b0;
+      --red-accent: #8b1a1a;
+      --sidebar-bg: #1c1410;
+      --sidebar-text: #e8dcc8;
+      --sidebar-hover: #2d2018;
+      --border: #d4b896;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body { font-family: 'Source Serif 4', serif; background: var(--parchment); color: var(--ink); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--parchment-dark); }
+    ::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 3px; }
+
+    /* Sidebar */
+    #sidebar {
+      background: var(--sidebar-bg);
+      background-image: 
+        repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(255,255,255,0.015) 30px, rgba(255,255,255,0.015) 31px);
+    }
+    .sidebar-book {
+      font-family: 'Crimson Pro', serif;
+      font-size: 0.875rem;
+      padding: 6px 16px;
+      cursor: pointer;
+      color: var(--sidebar-text);
+      opacity: 0.75;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .sidebar-book:hover { opacity: 1; background: var(--sidebar-hover); border-left-color: var(--gold); }
+    .sidebar-book.active { opacity: 1; color: var(--gold-light); border-left-color: var(--gold-light); background: rgba(180,130,0,0.1); font-weight: 500; }
+    .testament-header {
+      font-family: 'Playfair Display', serif;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold);
+      padding: 14px 16px 4px;
+      opacity: 0.7;
+    }
+
+    /* Main content */
+    .chapter-header {
+      font-family: 'Playfair Display', serif;
+    }
+    .verse-number {
+      font-family: 'Crimson Pro', serif;
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--gold);
+      vertical-align: super;
+      margin-right: 2px;
+      line-height: 1;
+    }
+    .verse-text {
+      font-family: 'Source Serif 4', serif;
+      font-size: 1.05rem;
+      line-height: 1.9;
+      color: var(--ink);
+    }
+    .verse-block {
+      padding: 2px 0;
+      border-radius: 3px;
+      transition: background 0.1s;
+    }
+    .verse-block:hover { background: rgba(180,130,0,0.07); }
+    .verse-block.highlighted { background: var(--gold-pale); }
+
+    /* Chapter nav buttons */
+    .ch-btn {
+      font-family: 'Crimson Pro', serif;
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      cursor: pointer;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      background: white;
+      color: var(--ink-light);
+      transition: all 0.15s;
+    }
+    .ch-btn:hover { background: var(--gold-pale); border-color: var(--gold); }
+    .ch-btn.active-ch { background: var(--ink); color: var(--gold-pale); border-color: var(--ink); }
+
+    /* Ornament divider */
+    .ornament {
+      display: flex; align-items: center; gap: 12px;
+      color: var(--gold); opacity: 0.5; font-size: 0.8rem;
+    }
+    .ornament::before, .ornament::after {
+      content: ''; flex: 1; height: 1px; background: currentColor;
+    }
+
+    /* Top bar */
+    .topbar { border-bottom: 1px solid var(--border); background: var(--parchment-dark); }
+
+    /* Loading skeleton */
+    @keyframes shimmer {
+      0% { background-position: -500px 0; }
+      100% { background-position: 500px 0; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, var(--parchment-dark) 25%, var(--border) 50%, var(--parchment-dark) 75%);
+      background-size: 1000px 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+    }
+
+    /* Search modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
+      display: flex; align-items: flex-start; justify-content: center; padding-top: 80px;
+    }
+    .modal-box {
+      background: var(--parchment); border: 1px solid var(--border); border-radius: 8px;
+      width: 90%; max-width: 560px; max-height: 70vh; overflow: hidden; display: flex; flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+
+    /* Fade transition */
+    .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+    .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+    /* Slide up */
+    .slide-enter-active { transition: all 0.25s ease-out; }
+    .slide-leave-active { transition: all 0.2s ease-in; }
+    .slide-enter-from { opacity: 0; transform: translateY(12px); }
+    .slide-leave-to { opacity: 0; transform: translateY(-6px); }
+
+    /* Responsive sidebar */
+    @media (max-width: 768px) {
+      #sidebar { position: fixed; left: -280px; top: 0; bottom: 0; z-index: 50; transition: left 0.3s; width: 260px !important; }
+      #sidebar.open { left: 0; }
+      .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; display: none; }
+      .sidebar-overlay.visible { display: block; }
+    }
+
+    /* Print */
+    @media print {
+      #sidebar, .topbar, .ch-nav { display: none !important; }
+      .verse-text { font-size: 11pt; line-height: 1.6; }
+    }
+  </style>
+</head>
+<body>
+<div id="app" class="flex h-screen overflow-hidden">
+
+  <!-- Sidebar overlay (mobile) -->
+  <div class="sidebar-overlay" :class="{ visible: sidebarOpen }" @click="sidebarOpen = false"></div>
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside id="sidebar" :class="{ open: sidebarOpen }" class="w-64 flex-shrink-0 flex flex-col overflow-hidden" style="min-height:0">
+    <!-- Sidebar header -->
+    <div class="flex items-center justify-between px-4 py-4 border-b" style="border-color:rgba(212,184,150,0.2)">
+      <div>
+        <div class="text-xs tracking-widest uppercase opacity-50 mb-0.5" style="color:var(--gold); font-family:'Crimson Pro',serif">Alkitab</div>
+        <div class="font-bold text-lg leading-none" style="color:var(--sidebar-text); font-family:'Playfair Display',serif">Indonesia</div>
+      </div>
+      <button @click="sidebarOpen = false" class="md:hidden text-gray-400 hover:text-white p-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <!-- Search books -->
+    <div class="px-3 py-2" style="border-bottom:1px solid rgba(212,184,150,0.15)">
+      <input v-model="bookSearch" placeholder="Cari kitab..." class="w-full text-sm px-3 py-1.5 rounded outline-none" 
+        style="background:rgba(255,255,255,0.06); color:var(--sidebar-text); border:1px solid rgba(212,184,150,0.2); font-family:'Crimson Pro',serif"
+        @input="filterBooks" />
+    </div>
+
+    <!-- Book list -->
+    <div class="flex-1 overflow-y-auto py-2" style="min-height:0">
+      <!-- Loading -->
+      <div v-if="loadingBooks" class="px-4 py-8 text-center" style="color:rgba(232,220,200,0.4); font-family:'Crimson Pro',serif; font-size:0.85rem">
+        Memuat daftar kitab...
+      </div>
+
+      <template v-else>
+        <!-- Perjanjian Lama -->
+        <div class="testament-header">Perjanjian Lama</div>
+        <template v-for="book in filteredOT" :key="book.id">
+          <div class="sidebar-book" :class="{ active: selectedBook?.id === book.id }" @click="selectBook(book)">
+            {{ book.name }}
+          </div>
+        </template>
+
+        <!-- Perjanjian Baru -->
+        <div class="testament-header mt-2">Perjanjian Baru</div>
+        <template v-for="book in filteredNT" :key="book.id">
+          <div class="sidebar-book" :class="{ active: selectedBook?.id === book.id }" @click="selectBook(book)">
+            {{ book.name }}
+          </div>
+        </template>
+      </template>
+    </div>
+
+    <!-- Translation badge -->
+    <div class="px-4 py-3" style="border-top:1px solid rgba(212,184,150,0.15)">
+      <div class="text-xs opacity-40" style="color:var(--sidebar-text); font-family:'Crimson Pro',serif">Terjemahan aktif:</div>
+      <div class="text-sm font-medium" style="color:var(--gold-light); font-family:'Crimson Pro',serif">{{ translationLabel }}</div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <div class="flex-1 flex flex-col overflow-hidden" style="min-width:0">
+
+    <!-- Top bar -->
+    <header class="topbar px-4 py-2 flex items-center gap-3 flex-shrink-0">
+      <!-- Mobile menu -->
+      <button @click="sidebarOpen = true" class="md:hidden p-1.5 rounded hover:bg-black/10" style="color:var(--ink-light)">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <span class="text-sm font-medium truncate" style="font-family:'Playfair Display',serif; color:var(--ink-light)">
+          {{ selectedBook ? selectedBook.name : 'Pilih Kitab' }}
+        </span>
+        <template v-if="selectedChapter">
+          <span class="text-xs opacity-40" style="color:var(--ink)">›</span>
+          <span class="text-sm" style="font-family:'Crimson Pro',serif; color:var(--ink-light)">Pasal {{ selectedChapter }}</span>
+        </template>
+      </div>
+
+      <!-- Font size -->
+      <div class="flex items-center gap-1">
+        <button @click="fontSize = Math.max(14, fontSize - 2)" class="w-7 h-7 flex items-center justify-center rounded text-xs hover:bg-black/10" style="color:var(--ink-light); font-family:'Crimson Pro',serif">A-</button>
+        <button @click="fontSize = Math.min(24, fontSize + 2)" class="w-7 h-7 flex items-center justify-center rounded text-xs hover:bg-black/10" style="color:var(--ink-light); font-family:'Playfair Display',serif">A+</button>
+      </div>
+
+      <!-- Search -->
+      <button @click="showSearch = true" class="flex items-center gap-2 px-3 py-1.5 rounded text-sm hover:bg-black/10 transition" style="color:var(--ink-light); font-family:'Crimson Pro',serif; border:1px solid var(--border)">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <span class="hidden sm:inline">Cari ayat</span>
+      </button>
+
+      <!-- Daily verse button -->
+      <button @click="goToDailyVerse" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded text-sm transition" 
+        style="background:var(--ink); color:var(--gold-pale); font-family:'Crimson Pro',serif; border:1px solid var(--ink)">
+        ✦ Ayat Harian
+      </button>
+    </header>
+
+    <!-- Chapter nav -->
+    <div v-if="selectedBook && chapterList.length" class="flex-shrink-0 px-4 py-2 border-b overflow-x-auto" style="border-color:var(--border); background:white/30">
+      <div class="ch-nav flex gap-1 min-w-max">
+        <button v-for="ch in chapterList" :key="ch" @click="selectChapter(ch)"
+          class="ch-btn" :class="{ 'active-ch': selectedChapter === ch }">
+          {{ ch }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <main class="flex-1 overflow-y-auto" style="min-height:0">
+      <div class="max-w-2xl mx-auto px-6 py-8">
+
+        <!-- Welcome screen -->
+        <transition name="fade">
+          <div v-if="!selectedBook && !loadingChapter" class="text-center py-16">
+            <div style="font-family:'Playfair Display',serif; font-size:3rem; color:var(--gold); opacity:0.3; line-height:1">✦</div>
+            <h1 class="mt-4 text-3xl font-bold" style="font-family:'Playfair Display',serif; color:var(--ink)">Alkitab Indonesia</h1>
+            <p class="mt-3 text-base opacity-60" style="font-family:'Crimson Pro',serif; color:var(--ink); max-width:320px; margin:12px auto 0">
+              Firman Tuhan dalam Bahasa Indonesia. Pilih sebuah kitab dari daftar untuk mulai membaca.
+            </p>
+            <div class="ornament mt-8 max-w-xs mx-auto"><span style="font-family:'Playfair Display',serif">✦</span></div>
+            
+            <!-- Quick access -->
+            <div class="mt-8 grid grid-cols-2 gap-3 max-w-sm mx-auto text-left">
+              <div v-for="q in quickLinks" :key="q.ref" @click="navigateTo(q)" 
+                class="p-3 rounded-lg cursor-pointer transition hover:shadow-md"
+                style="background:white; border:1px solid var(--border)">
+                <div class="text-xs uppercase tracking-wider mb-1" style="color:var(--gold); font-family:'Crimson Pro',serif">{{ q.label }}</div>
+                <div class="text-sm font-medium" style="font-family:'Playfair Display',serif; color:var(--ink)">{{ q.ref }}</div>
+              </div>
+            </div>
+          </div>
+        </transition>
+
+        <!-- Loading chapter -->
+        <div v-if="loadingChapter" class="space-y-4 py-4">
+          <div class="skeleton h-8 w-48 mx-auto"></div>
+          <div class="space-y-2 mt-8">
+            <div v-for="i in 12" :key="i" class="skeleton" :style="{ height: '18px', width: (60 + Math.random()*40) + '%' }"></div>
+          </div>
+        </div>
+
+        <!-- Chapter content -->
+        <transition name="slide">
+          <div v-if="currentChapterData && !loadingChapter" :key="selectedBook?.id + '-' + selectedChapter">
+
+            <!-- Chapter title -->
+            <div class="chapter-header text-center mb-8">
+              <div class="text-xs tracking-widest uppercase opacity-50 mb-2" style="color:var(--gold); font-family:'Crimson Pro',serif">
+                {{ isOT(selectedBook?.id) ? 'Perjanjian Lama' : 'Perjanjian Baru' }}
+              </div>
+              <h2 class="text-3xl font-bold leading-tight" style="color:var(--ink)">{{ selectedBook?.name }}</h2>
+              <div class="mt-1 text-lg" style="font-family:'Crimson Pro',serif; color:var(--ink-light); opacity:0.7">Pasal {{ selectedChapter }}</div>
+              <div class="ornament mt-4"><span style="font-family:'Playfair Display',serif; color:var(--gold)">✦</span></div>
+            </div>
+
+            <!-- Verses -->
+            <div class="space-y-1">
+              <div v-for="verse in currentChapterData.verses" :key="verse.number" 
+                class="verse-block px-2 -mx-2" 
+                :class="{ highlighted: highlightedVerse === verse.number }"
+                :id="'v' + verse.number"
+                @click="highlightedVerse = highlightedVerse === verse.number ? null : verse.number">
+                <span class="verse-text" :style="{ fontSize: fontSize + 'px' }">
+                  <sup class="verse-number">{{ verse.number }}</sup>{{ verse.text }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Chapter navigation -->
+            <div class="flex justify-between mt-12 pt-6" style="border-top:1px solid var(--border)">
+              <button v-if="selectedChapter > 1" @click="selectChapter(selectedChapter - 1)"
+                class="flex items-center gap-2 text-sm px-4 py-2 rounded hover:bg-black/5 transition"
+                style="font-family:'Crimson Pro',serif; color:var(--ink-light)">
+                ← Pasal {{ selectedChapter - 1 }}
+              </button>
+              <div v-else></div>
+              <button v-if="selectedChapter < chapterList.length" @click="selectChapter(selectedChapter + 1)"
+                class="flex items-center gap-2 text-sm px-4 py-2 rounded hover:bg-black/5 transition"
+                style="font-family:'Crimson Pro',serif; color:var(--ink-light)">
+                Pasal {{ selectedChapter + 1 }} →
+              </button>
+            </div>
+
+            <!-- Footer ornament -->
+            <div class="ornament mt-8 opacity-30"><span style="font-family:'Playfair Display',serif; color:var(--gold)">✦ ✦ ✦</span></div>
+
+          </div>
+        </transition>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ===== SEARCH MODAL ===== -->
+  <transition name="fade">
+    <div v-if="showSearch" class="modal-overlay" @click.self="showSearch = false">
+      <div class="modal-box">
+        <!-- Search header -->
+        <div class="flex items-center gap-3 px-4 py-3" style="border-bottom:1px solid var(--border)">
+          <svg class="w-4 h-4 flex-shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input v-model="searchQuery" @keyup.enter="doSearch" @keyup.esc="showSearch = false"
+            placeholder="Cari ayat... (mis: Yohanes 3:16, kasih, iman)"
+            class="flex-1 outline-none bg-transparent text-sm" style="font-family:'Source Serif 4',serif; color:var(--ink)"
+            ref="searchInput" autofocus />
+          <button @click="showSearch = false" class="opacity-40 hover:opacity-70 text-xs" style="font-family:'Crimson Pro',serif">ESC</button>
+        </div>
+        <!-- Search results or quick jumps -->
+        <div class="flex-1 overflow-y-auto p-3">
+          <div v-if="!searchQuery" class="py-4">
+            <div class="text-xs uppercase tracking-widest mb-3 px-2" style="color:var(--gold); font-family:'Crimson Pro',serif; opacity:0.7">Lompat ke kitab</div>
+            <div class="grid grid-cols-2 gap-1">
+              <div v-for="book in allBooks" :key="book.id" @click="selectBook(book); showSearch = false"
+                class="text-sm px-3 py-1.5 rounded cursor-pointer hover:bg-black/5 transition"
+                style="font-family:'Crimson Pro',serif; color:var(--ink)">
+                {{ book.name }}
+              </div>
+            </div>
+          </div>
+          <div v-else-if="searchLoading" class="py-8 text-center text-sm opacity-50" style="font-family:'Crimson Pro',serif">Mencari...</div>
+          <div v-else-if="searchResults.length === 0 && searchQuery.length > 2" class="py-8 text-center text-sm opacity-50" style="font-family:'Crimson Pro',serif">
+            Tidak ditemukan. Coba nama kitab + pasal:ayat (Kej 1:1)
+          </div>
+          <div v-else>
+            <div v-for="r in searchResults" :key="r.ref" @click="navigateTo(r); showSearch = false"
+              class="px-3 py-2 rounded cursor-pointer hover:bg-black/5 transition mb-1">
+              <div class="text-xs font-semibold mb-0.5" style="color:var(--gold); font-family:'Crimson Pro',serif">{{ r.ref }}</div>
+              <div class="text-sm leading-relaxed" style="font-family:'Source Serif 4',serif; color:var(--ink)">{{ r.preview }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </transition>
+
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+
+const API = 'https://bible.helloao.org/api';
+const TRANSLATION = 'ind_ayt'; // Indonesian Terjemahan Baru
+
+// OT book IDs (first 39 books)
+const OT_BOOKS = ['GEN','EXO','LEV','NUM','DEU','JOS','JDG','RUT','1SA','2SA','1KI','2KI','1CH','2CH','EZR','NEH','EST','JOB','PSA','PRO','ECC','SNG','ISA','JER','LAM','EZK','DAN','HOS','JOL','AMO','OBA','JON','MIC','NAH','HAB','ZEP','HAG','ZEC','MAL'];
+
+// Quick link presets
+const QUICK_LINKS = [
+  { label: 'Awal Mula', ref: 'Kejadian 1', bookId: 'GEN', chapter: 1 },
+  { label: 'Mazmur Terkenal', ref: 'Mazmur 23', bookId: 'PSA', chapter: 23 },
+  { label: 'Kabar Baik', ref: 'Yohanes 3', bookId: 'JHN', chapter: 3 },
+  { label: 'Kasih', ref: '1 Korintus 13', bookId: '1CO', chapter: 13 },
+];
+
+const DAILY_VERSES = [
+  { bookId: 'JHN', chapter: 3, verse: 16 },
+  { bookId: 'PSA', chapter: 23, verse: 1 },
+  { bookId: 'PRO', chapter: 3, verse: 5 },
+  { bookId: 'ROM', chapter: 8, verse: 28 },
+  { bookId: 'PHP', chapter: 4, verse: 13 },
+  { bookId: 'ISA', chapter: 40, verse: 31 },
+  { bookId: 'JER', chapter: 29, verse: 11 },
+];
+
+createApp({
+  setup() {
+    const allBooks = ref([]);
+    const loadingBooks = ref(true);
+    const selectedBook = ref(null);
+    const selectedChapter = ref(null);
+    const chapterList = ref([]);
+    const currentChapterData = ref(null);
+    const loadingChapter = ref(false);
+    const highlightedVerse = ref(null);
+    const fontSize = ref(17);
+    const bookSearch = ref('');
+    const sidebarOpen = ref(false);
+
+    const showSearch = ref(false);
+    const searchQuery = ref('');
+    const searchResults = ref([]);
+    const searchLoading = ref(false);
+    const searchInput = ref(null);
+
+    const translationLabel = ref('Terjemahan Baru (TB)');
+    const quickLinks = ref(QUICK_LINKS);
+
+    // Computed: filter OT/NT
+    const filteredOT = computed(() => {
+      const q = bookSearch.value.toLowerCase();
+      return allBooks.value.filter(b => OT_BOOKS.includes(b.id) && (!q || b.name.toLowerCase().includes(q)));
+    });
+    const filteredNT = computed(() => {
+      const q = bookSearch.value.toLowerCase();
+      return allBooks.value.filter(b => !OT_BOOKS.includes(b.id) && (!q || b.name.toLowerCase().includes(q)));
+    });
+
+    const isOT = (bookId) => OT_BOOKS.includes(bookId);
+
+    // Load books list
+    async function loadBooks() {
+      loadingBooks.value = true;
+      try {
+        // Try Indonesian TB first
+        let res = await fetch(`${API}/${TRANSLATION}/books.json`);
+        if (!res.ok) throw new Error('TB not found');
+        const data = await res.json();
+        allBooks.value = data.books || [];
+        translationLabel.value = 'Terjemahan Baru (TB)';
+      } catch (e) {
+        // Fallback to BSB (English) if Indonesian not available
+        try {
+          const res = await fetch(`${API}/BSB/books.json`);
+          const data = await res.json();
+          allBooks.value = data.books || [];
+          translationLabel.value = 'Berean Standard Bible (BSB)';
+        } catch (e2) {
+          console.error('Failed to load books', e2);
+        }
+      }
+      loadingBooks.value = false;
+    }
+
+    function getTranslation() {
+      return translationLabel.value.includes('TB') ? TRANSLATION : 'BSB';
+    }
+
+    async function selectBook(book) {
+      selectedBook.value = book;
+      chapterList.value = Array.from({ length: book.numberOfChapters }, (_, i) => i + 1);
+      sidebarOpen.value = false;
+      await selectChapter(1);
+    }
+
+    async function selectChapter(ch) {
+      if (!selectedBook.value) return;
+      selectedChapter.value = ch;
+      highlightedVerse.value = null;
+      currentChapterData.value = null;
+      loadingChapter.value = true;
+
+      // Scroll to top
+      document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+
+      try {
+        const trans = getTranslation();
+        const res = await fetch(`${API}/${trans}/${selectedBook.value.id}/${ch}.json`);
+        const data = await res.json();
+        // Parse verses
+        const verses = (data.chapter?.content || []).filter(c => c.type === 'verse').map(c => ({
+          number: c.number,
+          text: c.content?.map(p => typeof p === 'string' ? p : (p.text || '')).join('') || ''
+        }));
+        currentChapterData.value = { verses };
+      } catch (e) {
+        console.error('Failed to load chapter', e);
+        currentChapterData.value = { verses: [] };
+      }
+      loadingChapter.value = false;
+    }
+
+    async function navigateTo({ bookId, chapter, verse }) {
+      const book = allBooks.value.find(b => b.id === bookId);
+      if (!book) return;
+      await selectBook(book);
+      await selectChapter(chapter);
+      if (verse) {
+        await nextTick();
+        setTimeout(() => {
+          const el = document.getElementById('v' + verse);
+          if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightedVerse.value = verse; }
+        }, 300);
+      }
+    }
+
+    function goToDailyVerse() {
+      const day = new Date().getDate() % DAILY_VERSES.length;
+      navigateTo(DAILY_VERSES[day]);
+    }
+
+    // Search: parse reference like "Kej 1:1" or keyword
+    async function doSearch() {
+      if (!searchQuery.value.trim()) return;
+      searchLoading.value = true;
+      searchResults.value = [];
+
+      const q = searchQuery.value.trim();
+
+      // Try to detect "BookName chapter:verse" pattern
+      const refMatch = q.match(/^(.+?)\s+(\d+)(?::(\d+))?$/);
+      if (refMatch) {
+        const bookName = refMatch[1].toLowerCase();
+        const ch = parseInt(refMatch[2]);
+        const vNum = refMatch[3] ? parseInt(refMatch[3]) : null;
+
+        const matchedBook = allBooks.value.find(b =>
+          b.name.toLowerCase().includes(bookName) ||
+          b.id.toLowerCase() === bookName
+        );
+        if (matchedBook) {
+          try {
+            const trans = getTranslation();
+            const res = await fetch(`${API}/${trans}/${matchedBook.id}/${ch}.json`);
+            const data = await res.json();
+            const verses = (data.chapter?.content || []).filter(c => c.type === 'verse').map(c => ({
+              number: c.number,
+              text: c.content?.map(p => typeof p === 'string' ? p : (p.text || '')).join('') || ''
+            }));
+
+            if (vNum) {
+              const v = verses.find(v => v.number === vNum);
+              if (v) searchResults.value.push({ ref: `${matchedBook.name} ${ch}:${vNum}`, preview: v.text, bookId: matchedBook.id, chapter: ch, verse: vNum });
+            } else {
+              // Show first 5 verses
+              verses.slice(0, 5).forEach(v => {
+                searchResults.value.push({ ref: `${matchedBook.name} ${ch}:${v.number}`, preview: v.text, bookId: matchedBook.id, chapter: ch, verse: v.number });
+              });
+            }
+          } catch (e) { console.error(e); }
+        }
+      }
+
+      searchLoading.value = false;
+    }
+
+    watch(searchQuery, (v) => {
+      if (v.length > 2) doSearch();
+      else searchResults.value = [];
+    });
+
+    watch(showSearch, async (v) => {
+      if (v) { await nextTick(); searchInput.value?.focus(); }
+      else { searchQuery.value = ''; searchResults.value = []; }
+    });
+
+    onMounted(() => {
+      loadBooks();
+    });
+
+    return {
+      allBooks, loadingBooks, selectedBook, selectedChapter,
+      chapterList, currentChapterData, loadingChapter,
+      highlightedVerse, fontSize, bookSearch,
+      filteredOT, filteredNT, isOT,
+      sidebarOpen, showSearch, searchQuery, searchResults, searchLoading, searchInput,
+      translationLabel, quickLinks,
+      selectBook, selectChapter, navigateTo, goToDailyVerse, doSearch, filterBooks: () => {}
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
